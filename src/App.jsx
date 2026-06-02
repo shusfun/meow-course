@@ -1,3 +1,4 @@
+import { Monitor, Moon, Sun } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { installTabGroups, tools } from './data';
 import { detectPlatform } from './platform';
@@ -43,6 +44,24 @@ const brandLogos = {
   },
 };
 
+const THEME_STORAGE_KEY = 'meow-course-theme';
+const themeOptions = [
+  { id: 'system', label: '跟随系统', Icon: Monitor },
+  { id: 'light', label: '浅色模式', Icon: Sun },
+  { id: 'dark', label: '深色模式', Icon: Moon },
+];
+
+function getSystemTheme() {
+  if (typeof window === 'undefined') return 'dark';
+  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function getStoredThemeMode() {
+  if (typeof window === 'undefined') return 'system';
+  const value = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return themeOptions.some((option) => option.id === value) ? value : 'system';
+}
+
 function formatDate(value) {
   if (!value) return '';
   return new Intl.DateTimeFormat('zh-CN').format(new Date(value));
@@ -51,12 +70,35 @@ function formatDate(value) {
 function App() {
   const [activeKey, setActiveKey] = useState('claude');
   const [platform] = useState(() => detectPlatform());
+  const [themeMode, setThemeMode] = useState(() => getStoredThemeMode());
+  const [systemTheme, setSystemTheme] = useState(() => getSystemTheme());
   const activeTool = tools.find((tool) => tool.key === activeKey) ?? tools[0];
+  const resolvedTheme = themeMode === 'system' ? systemTheme : themeMode;
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const updateSystemTheme = () => setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
+
+    updateSystemTheme();
+    mediaQuery.addEventListener('change', updateSystemTheme);
+    return () => mediaQuery.removeEventListener('change', updateSystemTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.dataset.themeMode = themeMode;
+    document.documentElement.style.colorScheme = resolvedTheme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeMode);
+  }, [resolvedTheme, themeMode]);
 
   return (
-    <div className="min-h-screen bg-[#0a0e1a] text-slate-200">
+    <div className="app-shell min-h-screen text-slate-200">
       <BackgroundGlow />
-      <SiteHeader />
+      <SiteHeader
+        themeMode={themeMode}
+        resolvedTheme={resolvedTheme}
+        onThemeModeChange={setThemeMode}
+      />
       <main className="relative z-10 mx-auto max-w-5xl px-4 py-8 sm:px-6">
         <HeroTabs activeKey={activeKey} onChange={setActiveKey} />
         <ToolGuide key={activeKey} tool={activeTool} platform={platform} />
@@ -68,7 +110,7 @@ function App() {
 
 function BackgroundGlow() {
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-0 h-[400px]">
+    <div className="background-glow pointer-events-none fixed inset-x-0 top-0 z-0 h-[400px]">
       <div className="absolute inset-0 bg-gradient-to-b from-indigo-900/20 via-purple-900/10 to-transparent" />
       <div className="absolute left-1/4 top-0 h-96 w-96 rounded-full bg-indigo-600/5 blur-3xl" />
       <div className="absolute right-1/4 top-0 h-96 w-96 rounded-full bg-purple-600/5 blur-3xl" />
@@ -76,19 +118,55 @@ function BackgroundGlow() {
   );
 }
 
-function SiteHeader() {
+function SiteHeader({ themeMode, resolvedTheme, onThemeModeChange }) {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/5 bg-[#0a0e1a]/80 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-4 sm:px-6">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-xl shadow-lg shadow-indigo-500/20">
-          🐱
+    <header className="site-header sticky top-0 z-50 border-b border-white/5 bg-[#0a0e1a]/80 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 text-xl shadow-lg shadow-indigo-500/20">
+            🐱
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold text-white">shus~肺雾喵~</h1>
+            <p className="hidden text-xs text-gray-500 sm:block">就你还需要教程喵？</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-lg font-bold tracking-tight text-white">shus~肺雾喵~</h1>
-          <p className="hidden text-xs text-gray-500 sm:block">就你还需要教程喵？</p>
-        </div>
+        <ThemeSwitcher
+          themeMode={themeMode}
+          resolvedTheme={resolvedTheme}
+          onThemeModeChange={onThemeModeChange}
+        />
       </div>
     </header>
+  );
+}
+
+function ThemeSwitcher({ themeMode, resolvedTheme, onThemeModeChange }) {
+  return (
+    <div
+      className="theme-switcher flex shrink-0 items-center gap-1 rounded-lg border border-white/10 p-1"
+      aria-label={`主题模式，当前为${themeOptions.find((option) => option.id === themeMode)?.label ?? '跟随系统'}，显示为${resolvedTheme === 'dark' ? '深色' : '浅色'}`}
+      role="group"
+    >
+      {themeOptions.map(({ id, label, Icon }) => {
+        const active = id === themeMode;
+        return (
+          <button
+            key={id}
+            type="button"
+            className={`theme-option inline-flex h-8 w-8 items-center justify-center rounded-md transition ${
+              active ? 'theme-option-active' : ''
+            }`}
+            onClick={() => onThemeModeChange(id)}
+            aria-label={label}
+            aria-pressed={active}
+            title={label}
+          >
+            <Icon aria-hidden="true" size={16} strokeWidth={2.2} />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -108,7 +186,7 @@ function HeroTabs({ activeKey, onChange }) {
       </section>
 
       <div className="mb-10 flex justify-center">
-        <div className="flex flex-wrap justify-center gap-2 rounded-xl border border-white/5 bg-[#151d35]/50 p-1.5">
+        <div className="hero-tab-shell flex flex-wrap justify-center gap-2 rounded-xl border border-white/5 bg-[#151d35]/50 p-1.5">
           {tools.map((tool) => {
             const active = tool.key === activeKey;
             const accent = accentClass[tool.accent];
@@ -251,7 +329,7 @@ function InstallTabs({ tabs, platform, accent }) {
   if (!activeTab) return null;
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/5 bg-[#0f1629]/60">
+    <div className="install-tabs-card overflow-hidden rounded-xl border border-white/5 bg-[#0f1629]/60">
       <div className="flex flex-wrap gap-2 border-b border-white/5 p-2">
         {availableTabs.map((tab) => {
           const active = tab.id === activeTab.id;
@@ -333,7 +411,7 @@ function PlainList({ items }) {
 
 function FeatureList({ title, features }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-[#0f1629]/60 p-4">
+    <div className="feature-card rounded-lg border border-white/5 bg-[#0f1629]/60 p-4">
       {title && <h4 className="mb-3 text-sm font-medium text-white">{title}</h4>}
       <ul className="list-inside list-disc space-y-1.5">
         {features.map(([name, description]) => (
@@ -395,7 +473,7 @@ function CodeBlock({ language, code }) {
   }
 
   return (
-    <div className="overflow-hidden rounded-lg border border-white/5 bg-[#070b14]">
+    <div className="code-card overflow-hidden rounded-lg border border-white/5 bg-[#070b14]">
       <div className="flex items-center justify-between border-b border-white/5 px-3 py-2">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">
           {language}
@@ -418,10 +496,13 @@ function CodeBlock({ language, code }) {
 
 function SiteFooter() {
   return (
-    <footer className="relative z-10 border-t border-white/5 bg-[#0a0e1a]/50 backdrop-blur-sm">
+    <footer className="site-footer relative z-10 border-t border-white/5 bg-[#0a0e1a]/50 backdrop-blur-sm">
       <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-4 py-6 text-xs text-gray-500 sm:flex-row sm:px-6">
         <p>shus~肺雾喵~ · 嫌弃你但还是帮了你喵 🐾</p>
         <div className="flex flex-wrap items-center justify-center gap-4">
+          <a href="https://github.com/shusfun/meow-course" target="_blank" rel="noreferrer" className="hover:text-white">
+            开源地址
+          </a>
           <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noreferrer" className="hover:text-white">
             Claude 文档
           </a>
