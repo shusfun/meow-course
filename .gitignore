@@ -1,0 +1,15 @@
+.ace-tool/
+source-archive/
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.local
+vite-dev*.log
+course-waasabi-reference.png
+Snipaste_*.png
